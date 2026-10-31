@@ -1,0 +1,5 @@
+simulation: claude-update
+routing: path
+mocks:
+  - routeKey: mirror
+    path: ../mocks/claude-mirror/default.js

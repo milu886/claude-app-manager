@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.reference/
+.tmp/
+*.log
+sim.ndjson
+sim.err

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Claude APP Manager</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="renderer.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><img src="icon.svg" width="37" height="37" alt=""><div>Claude<span>APP Manager</span></div></div>
+    <nav aria-label="主导航">
+      <button class="nav active" data-page="overview"><span class="nav-symbol">◫</span>应用管理</button>
+      <button class="nav" data-page="history"><span class="nav-symbol">≡</span>活动记录</button>
+      <button class="nav" data-page="settings"><span class="nav-symbol">⚙</span>设置</button>
+      <button class="nav" data-page="about"><span class="nav-symbol">ⓘ</span>关于</button>
+    </nav>
+    <div class="sidebar-bottom"><span class="live-dot"></span><span id="watch-label">自动检查已开启</span><small>Manager <span id="app-version">1.0.5</span></small></div>
+  </aside>
+  <main>
+    <section id="overview" class="page">
+      <header><div><h1>应用管理</h1><p>让 Claude 桌面端保持最新。</p></div><button id="check" class="button secondary"><span id="check-icon">⟳</span> 检查更新</button></header>
+      <div class="app-panel">
+        <div class="app-heading"><div class="claude-icon"><img src="icon.svg" width="68" height="68" alt="Claude APP Manager 图标"></div><div><h2>Claude Desktop</h2><p id="platform-label">正在识别系统…</p></div><span id="status-badge" class="badge">正在检测</span></div>
+        <div class="version-comparison"><div><label>本机版本</label><strong id="installed-version">—</strong><small id="installed-kind">正在检测安装状态</small></div><span class="version-arrow" aria-hidden="true">→</span><div><label>最新版本</label><strong id="latest-version">—</strong><small id="release-date">连接更新源后显示</small></div></div>
+        <div id="job" class="job" hidden><div class="job-label"><strong id="job-title">正在下载</strong><span id="job-percent"></span></div><progress id="job-progress" max="100" value="0" aria-label="下载进度"></progress><div class="job-footer"><span id="job-size"></span><button id="cancel" class="text-button">取消下载</button></div></div>
+        <div class="app-actions"><button id="primary" class="button primary" disabled>正在检查…</button><button id="launch" class="button secondary" disabled>启动 Claude</button><button id="release" class="text-button release-button">发行说明 ↗</button></div>
+        <div id="ready-note" class="ready-note" hidden>安装包 SHA-256 校验通过，可以安装。</div>
+        <div id="pending-note" class="ready-note" role="status" hidden></div>
+      </div>
+      <div id="error" class="error" role="alert" hidden></div>
+      <div class="monitor-strip"><span id="monitor-dot" class="live-dot"></span><div><strong id="monitor-title">持续关注新版本</strong><p id="monitor-detail">启动时检查，后台定时同步镜像清单。</p></div><button id="monitor-settings" class="text-button">管理</button></div>
+      <div class="details"><h3>更新信息</h3><dl><div><dt>下载来源</dt><dd id="source-label">国内镜像优先，GitHub 回退</dd></div><div><dt>安装包</dt><dd id="asset-label">—</dd></div><div><dt>最近检查</dt><dd id="last-check">尚未检查</dd></div><div><dt>下次检查</dt><dd id="next-check">—</dd></div><div><dt>文件校验</dt><dd id="hash-label" class="hash">等待版本信息</dd></div></dl></div>
+      <footer><span>安装包由 Wangnov / claude-app-mirror 镜像分发</span><button id="uninstall" class="text-button danger" disabled>卸载 Claude</button></footer>
+    </section>
+    <section id="history" class="page" hidden><header><div><h1>活动记录</h1><p>版本检查、下载校验和安装结果。</p></div></header><div id="history-list" class="history-list"></div></section>
+    <section id="settings" class="page" hidden>
+      <header><div><h1>设置</h1><p>按你的使用习惯管理更新。</p></div></header>
+      <h3 class="group-title">实时更新</h3>
+      <div class="setting-row"><div><label for="autoCheck">自动检查更新</label><p>Manager 运行时定期检查，网络故障后自动重试。</p></div><input id="autoCheck" type="checkbox" role="switch"></div>
+      <div class="setting-row"><div><label for="interval">检查频率</label><p>上游镜像约每 15 分钟同步一次官方版本。</p></div><select id="interval"><option value="1">每 1 分钟</option><option value="5">每 5 分钟</option><option value="15">每 15 分钟</option><option value="30">每 30 分钟</option></select></div>
+      <div class="setting-row"><div><label for="autoDownload">发现更新后自动下载</label><p>仅在本机已安装 Claude 且有新版本时下载。</p></div><input id="autoDownload" type="checkbox" role="switch"></div>
+      <div class="setting-row"><div><label for="autoInstall">空闲时自动安装</label><p>仅支持 Windows MSIX；Claude 退出后安装，不强制关闭应用。</p></div><input id="autoInstall" type="checkbox" role="switch"></div>
+      <h3 class="group-title">下载与运行</h3>
+      <div class="setting-row"><div><label for="source">下载来源</label><p>同时比对 GitHub 发布版本并取较新者；镜像失败自动回退；所有下载都必须通过 SHA-256 校验。</p></div><select id="source"><option value="auto">国内镜像优先</option><option value="github">仅 GitHub</option></select></div>
+      <div class="setting-row"><div><label for="background">关闭窗口后在托盘运行</label><p>保持后台检查；从系统托盘菜单可以退出 Manager。</p></div><input id="background" type="checkbox" role="switch"></div>
+      <div class="setting-row"><div><label for="launchAtLogin">登录 Windows 后启动</label><p>打包版可用，启动后驻留系统托盘。</p></div><input id="launchAtLogin" type="checkbox" role="switch"></div>
+      <div class="setting-row"><div><label for="theme">外观</label><p>选择适合当前环境的显示模式。</p></div><select id="theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></div>
+      <div class="setting-row"><div><label>安装包缓存</label><p>清理已下载的安装包，不影响已安装的 Claude。</p></div><button id="cache" class="button secondary">清理缓存</button></div>
+    </section>
+    <section id="about" class="page" hidden>
+      <header><div><h1>关于</h1><p>Claude APP Manager</p></div></header>
+      <div class="about-brand"><img src="icon.svg" width="82" height="82" alt=""><h2>Claude 的安装与更新助手。</h2><p>参考 Codex App Manager 的管理流程，接入 Claude App Mirror 的动态清单和离线安装包。</p></div>
+      <div class="details about-details"><h3>工作方式</h3><p>启动时读取最新清单，按系统架构选择安装包；下载后校验 SHA-256，Windows 安装前还会验证 Authenticode 发布者。每次安装前重新检查版本，防止误降级。</p><p>Windows 支持 MSIX 安装、启动和保留个人数据的卸载；macOS 与 Linux 会打开系统安装程序，由你完成安装。此镜像没有 Claude 增量包，更新使用完整安装包。</p><p>自动检查需要 Manager 保持运行。上游镜像约每 15 分钟同步一次，检查频率无法缩短上游同步延迟。Manager 自身的在线更新尚未配置发布仓库。</p><p>这是独立的第三方管理工具，与 Anthropic 没有隶属关系。Claude 的账户、服务与授权遵循其官方规则。</p><button id="reference" class="button secondary">查看参考开源项目 ↗</button></div>
+    </section>
+  </main>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

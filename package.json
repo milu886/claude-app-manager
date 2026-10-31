@@ -1,0 +1,56 @@
+{
+  "name": "claude-app-manager",
+  "version": "1.0.5",
+  "description": "Claude desktop installer and live update manager",
+  "author": "Claude App Manager contributors",
+  "license": "MIT",
+  "main": "app/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.cjs",
+    "check": "node scripts/check.cjs",
+    "smoke": "node scripts/smoke.cjs",
+    "build": "electron-builder --win portable nsis --x64",
+    "build:arm64": "electron-builder --win portable nsis --arm64",
+    "build:mac": "electron-builder --mac dmg",
+    "build:linux": "electron-builder --linux AppImage"
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "io.claudemanager.desktop",
+    "productName": "Claude APP Manager",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "app/**/*",
+      "scripts/platform.ps1",
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.md"
+    ],
+    "win": {
+      "icon": "app/ui/icon.ico",
+      "artifactName": "Claude-APP-Manager-${version}-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Claude-APP-Manager-${version}-${arch}-portable.${ext}"
+    },
+    "nsis": {
+      "artifactName": "Claude-APP-Manager-${version}-${arch}-setup.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "mac": {
+      "category": "public.app-category.utilities"
+    },
+    "linux": {
+      "category": "Utility"
+    },
+    "publish": null
+  }
+}
