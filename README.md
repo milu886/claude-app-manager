@@ -8,8 +8,8 @@ Claude 桌面端的安装、更新、启动与卸载管理器。参考 [Codex Ap
 
 从 [Releases](https://github.com/milu886/claude-app-manager/releases/latest) 下载（本地构建产物位于 `dist/`）：
 
-- `Claude-APP-Manager-1.0.5-x64-portable.exe`：免安装，双击运行。
-- `Claude-APP-Manager-1.0.5-x64-setup.exe`：安装版，可选择安装目录与桌面快捷方式。
+- `Claude-APP-Manager-1.0.6-x64-portable.exe`：免安装，双击运行。
+- `Claude-APP-Manager-1.0.6-x64-setup.exe`：安装版，可选择安装目录与桌面快捷方式。
 - `SHA256SUMS.txt`：以上文件的 SHA-256 校验值。
 
 Manager 安装包不包含 Claude 本体；运行后按当前架构下载 Claude。Windows 10/11 需要能够正常使用 MSIX / AppX 安装服务。管理器本身尚未配置 Authenticode 签名，Windows 可能显示发行者未知；这与下载的官方 Claude MSIX 的签名是两回事。
@@ -18,7 +18,7 @@ Manager 安装包不包含 Claude 本体；运行后按当前架构下载 Claude
 
 - 识别已安装的 Claude MSIX、版本、运行状态与启动入口。
 - 每次启动检查更新；默认每分钟轮询，支持 5 / 15 / 30 分钟。
-- 国内镜像优先，同时比对 GitHub 发布版本，取较新者；元数据与安装包均有 GitHub 回退；也可只使用 GitHub。GitHub 版本信息读取发布附带的 `release-manifest.json`（普通下载，不占用 GitHub API 每小时 60 次的未登录配额），仅在其不可用时才调用 API。
+- 下载来源默认“自动（检测最新版本）”：同时检查国内镜像与 GitHub 发布，使用较新的版本，并从所有可用来源同时下载；任一来源失败时由其他来源补上。也可选择“仅 GitHub”。GitHub 版本信息读取发布附带的 `release-manifest.json`（普通下载，不占用 GitHub API 每小时 60 次的未登录配额），仅在其不可用时才调用 API。
 - 按 x64 / ARM64 选择安装包，不把版本固定在用户提供的 `3.1623.0`。
 - 多连接分段下载：默认 6 个连接、8 MB 分段，镜像、Anthropic 官方 CDN（固定版本地址）与 GitHub 同时分担，较快的来源承担更多分段；连接 30 秒无数据自动重试，网络中断后下次从已完成的分段续传。实测经代理下载 283 MB 用时约 48 秒（单连接约 13 分钟）。
 - 显示下载进度、速度与连接数；支持取消、缓存复用与清理。

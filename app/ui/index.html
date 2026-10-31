@@ -17,7 +17,7 @@
       <button class="nav" data-page="settings"><span class="nav-symbol">⚙</span>设置</button>
       <button class="nav" data-page="about"><span class="nav-symbol">ⓘ</span>关于</button>
     </nav>
-    <div class="sidebar-bottom"><span class="live-dot"></span><span id="watch-label">自动检查已开启</span><small>Manager <span id="app-version">1.0.5</span></small></div>
+    <div class="sidebar-bottom"><span class="live-dot"></span><span id="watch-label">自动检查已开启</span><small>Manager <span id="app-version">1.0.6</span></small></div>
   </aside>
   <main>
     <section id="overview" class="page">
@@ -32,7 +32,7 @@
       </div>
       <div id="error" class="error" role="alert" hidden></div>
       <div class="monitor-strip"><span id="monitor-dot" class="live-dot"></span><div><strong id="monitor-title">持续关注新版本</strong><p id="monitor-detail">启动时检查，后台定时同步镜像清单。</p></div><button id="monitor-settings" class="text-button">管理</button></div>
-      <div class="details"><h3>更新信息</h3><dl><div><dt>下载来源</dt><dd id="source-label">国内镜像优先，GitHub 回退</dd></div><div><dt>安装包</dt><dd id="asset-label">—</dd></div><div><dt>最近检查</dt><dd id="last-check">尚未检查</dd></div><div><dt>下次检查</dt><dd id="next-check">—</dd></div><div><dt>文件校验</dt><dd id="hash-label" class="hash">等待版本信息</dd></div></dl></div>
+      <div class="details"><h3>更新信息</h3><dl><div><dt>下载来源</dt><dd id="source-label">自动检测最新版本</dd></div><div><dt>安装包</dt><dd id="asset-label">—</dd></div><div><dt>最近检查</dt><dd id="last-check">尚未检查</dd></div><div><dt>下次检查</dt><dd id="next-check">—</dd></div><div><dt>文件校验</dt><dd id="hash-label" class="hash">等待版本信息</dd></div></dl></div>
       <footer><span>安装包由 Wangnov / claude-app-mirror 镜像分发</span><button id="uninstall" class="text-button danger" disabled>卸载 Claude</button></footer>
     </section>
     <section id="history" class="page" hidden><header><div><h1>活动记录</h1><p>版本检查、下载校验和安装结果。</p></div></header><div id="history-list" class="history-list"></div></section>
@@ -44,7 +44,7 @@
       <div class="setting-row"><div><label for="autoDownload">发现更新后自动下载</label><p>仅在本机已安装 Claude 且有新版本时下载。</p></div><input id="autoDownload" type="checkbox" role="switch"></div>
       <div class="setting-row"><div><label for="autoInstall">空闲时自动安装</label><p>仅支持 Windows MSIX；Claude 退出后安装，不强制关闭应用。</p></div><input id="autoInstall" type="checkbox" role="switch"></div>
       <h3 class="group-title">下载与运行</h3>
-      <div class="setting-row"><div><label for="source">下载来源</label><p>同时比对 GitHub 发布版本并取较新者；镜像失败自动回退；所有下载都必须通过 SHA-256 校验。</p></div><select id="source"><option value="auto">国内镜像优先</option><option value="github">仅 GitHub</option></select></div>
+      <div class="setting-row"><div><label for="source">下载来源</label><p>自动检测国内镜像与 GitHub，使用最新的版本，并从所有可用来源同时下载；所有下载都必须通过 SHA-256 校验。</p></div><select id="source"><option value="auto">自动（检测最新版本）</option><option value="github">仅 GitHub</option></select></div>
       <div class="setting-row"><div><label for="background">关闭窗口后在托盘运行</label><p>保持后台检查；从系统托盘菜单可以退出 Manager。</p></div><input id="background" type="checkbox" role="switch"></div>
       <div class="setting-row"><div><label for="launchAtLogin">登录 Windows 后启动</label><p>打包版可用，启动后驻留系统托盘。</p></div><input id="launchAtLogin" type="checkbox" role="switch"></div>
       <div class="setting-row"><div><label for="theme">外观</label><p>选择适合当前环境的显示模式。</p></div><select id="theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></div>

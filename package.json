@@ -1,6 +1,6 @@
 {
   "name": "claude-app-manager",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Claude desktop installer and live update manager",
   "author": "Claude App Manager contributors",
   "license": "MIT",
