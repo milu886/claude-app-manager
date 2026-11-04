@@ -106,3 +106,18 @@ test('leftover Claude-started programs need confirmation; automatic installs nev
   assert.deepEqual(calls.at(-1),[4242]);assert.equal(m.state.installed.version,'3.1623.0.0');assert.equal(m.state.ready,null);assert.equal(statusCalls,1,'post-install status comes from the install result');
   assert.ok(m.state.logs.some(l=>/已关闭由 Claude 启动的程序/.test(l.message)));
 });
+test('in the endgame a slow chunk is raced on a faster source and the slow copy is cancelled',async t=>{
+  const big=512*1024,fastStarts=[];let slowOpen=0;
+  const slow=await server(t,(req,res)=>{const m=/bytes=(\d+)-(\d+)/.exec(req.headers.range||'');const start=Number(m[1]),end=Number(m[2]);slowOpen++;res.writeHead(206,{'Content-Range':`bytes ${start}-${end}/${payload.length}`,'Content-Length':end-start+1});let at=start;const timer=setInterval(()=>{if(at>end){clearInterval(timer);return res.end();}res.write(payload.subarray(at,Math.min(at+16*1024,end+1)));at+=16*1024;},100);res.on('close',()=>{clearInterval(timer);slowOpen--;});});
+  const fast=await server(t,ranged(payload,fastStarts));const dir=await temp(t),began=Date.now();
+  const file=await downloadVerified(new ReleaseClient({local:true}),release([`${slow}/pinned`,`${fast}/pinned`]),dir,{chunkSize:big,connections:2,stall:5000});
+  assert.deepEqual(await fs.readFile(file),payload);
+  assert.ok(Date.now()-began<2500,`finished in ${Date.now()-began} ms instead of waiting ~3 s for the slow source`);
+  assert.deepEqual(fastStarts.sort((a,b)=>a-b),[0,big],'the fast source also fetched the chunk the slow source started');
+  await new Promise(r=>setTimeout(r,200));assert.equal(slowOpen,0,'the slow copy was cancelled');
+});
+test('one source is never given more than six parallel connections',async t=>{
+  let open=0,peak=0;const base=await server(t,(req,res)=>{open++;peak=Math.max(peak,open);res.on('finish',()=>open--);setTimeout(()=>ranged(payload)(req,res),20);});const dir=await temp(t);
+  const file=await downloadVerified(new ReleaseClient({local:true}),release([`${base}/pinned`]),dir,{chunkSize:32*1024,connections:16});
+  assert.deepEqual(await fs.readFile(file),payload);assert.ok(peak<=6&&peak>=4,`peak connections ${peak}`);
+});

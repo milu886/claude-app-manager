@@ -135,10 +135,14 @@ async function hashFile(file) {
   for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
   return hash.digest('hex');
 }
-// Measured on a proxied connection: one connection ~1.7 MB/s from GitHub, eight ~5.4 MB/s. Chunks keep a
-// stalled or failing source cheap to retry elsewhere and make an interrupted download resumable.
-const CHUNK_SIZE = 8 * 1024 * 1024, CONNECTIONS = 6, STALL_MS = 30000;
+// Measured on a proxied connection: one connection ~1.7 MB/s from GitHub, eight ~5.4 MB/s; on a slower day the
+// mirror ran 0.17 MB/s on one connection and 1.5 MB/s on four. Throughput scales with connections per source, so
+// each source may use up to Chromium's six per host. A second Chromium pool (twelve per source) was tried and
+// dropped: interleaved runs were slower than one pool once the proxy route was saturated. Small chunks keep a
+// slow or failing connection cheap to retry elsewhere and make an interrupted download resumable.
+const CHUNK_SIZE = 4 * 1024 * 1024, CONNECTIONS = 16, PER_SOURCE = 6, HEDGE_MIN = 256 * 1024, STALL_MS = 30000;
 class RangeUnsupported extends Error {}
+class Superseded extends Error {}
 // Aborts a request when no bytes arrive for `ms`; `touch()` on every chunk keeps it alive.
 function stallWatch(signal, ms) {
   const idle = new AbortController(); let timer;
@@ -220,20 +224,25 @@ async function downloadChunks(client, release, urls, partial, { signal, onProgre
   if (!done.size) { await removePartial(partial); const created = await fsp.open(partial, 'w'); await created.truncate(release.size); await created.close(); }
   const handle = await fsp.open(partial, 'r+');
   const sources = urls.map(url => ({ url, host: new URL(url).hostname, active: 0, bytes: 0, ms: 0, failures: 0, off: false, noRange: false }));
-  const pending = [...Array(count).keys()].filter(i => !done.has(i)), inflight = new Map(), attempts = new Map(), errors = [];
+  // running: chunk index -> attempts in flight (two only in the endgame, when a slow chunk is raced elsewhere).
+  const pending = [...Array(count).keys()].filter(i => !done.has(i)), running = new Map(), failuresByChunk = new Map(), errors = [];
   let doneBytes = [...done].reduce((sum, i) => sum + length(i), 0), last = 0, saving = Promise.resolve();
   const report = force => {
     const now = Date.now(); if (!force && now - last < 150) return; last = now;
     const active = sources.filter(s => s.active);
-    onProgress({ phase: 'downloading', received: doneBytes + [...inflight.values()].reduce((a, b) => a + b, 0), total: release.size,
+    const partialBytes = [...running.values()].reduce((sum, set) => sum + Math.max(0, ...[...set].map(a => a.got)), 0);
+    onProgress({ phase: 'downloading', received: doneBytes + partialBytes, total: release.size,
       connections: active.reduce((a, s) => a + s.active, 0), hosts: active.map(s => s.host) });
   };
   const save = () => { const data = JSON.stringify({ sha256: release.sha256, size: release.size, chunkSize, done: [...done] }); saving = saving.then(() => fsp.writeFile(statePath, data)).catch(() => {}); };
   // Unmeasured sources are tried first so every source gets sampled; afterwards throughput per active connection wins.
+  // A source never gets more than PER_SOURCE connections: Chromium would queue extra requests and the stall timer
+  // would count that queueing as a dead connection.
   const score = s => (s.ms ? s.bytes / s.ms : 1e9) / (s.active + 1);
-  const pick = () => sources.filter(s => !s.off && !s.noRange).sort((a, b) => score(b) - score(a))[0];
-  async function fetchChunk(i, source) {
-    const start = i * chunkSize, end = start + length(i) - 1, watch = stallWatch(signal, stall), began = Date.now();
+  const pick = exclude => sources.filter(s => !s.off && !s.noRange && s.active < PER_SOURCE && s !== exclude).sort((a, b) => score(b) - score(a))[0];
+  async function fetchChunk(i, attempt) {
+    const source = attempt.source, start = i * chunkSize, end = start + length(i) - 1, began = Date.now();
+    const watch = stallWatch(signal ? AbortSignal.any([signal, attempt.controller.signal]) : attempt.controller.signal, stall);
     let position = start;
     try {
       const r = await client.request(source.resolved || source.url, { signal: watch.signal, timeout: 10 * 60 * 1000, headers: { Range: `bytes=${start}-${end}` } });
@@ -245,33 +254,48 @@ async function downloadChunks(client, release, urls, partial, { signal, onProgre
       for (;;) {
         const { done: finished, value } = await reader.read(); if (finished) break;
         watch.touch(); if (position + value.byteLength > end + 1) { await reader.cancel(); throw new Error('下载分段大于请求范围'); }
-        await handle.write(value, 0, value.byteLength, position); position += value.byteLength; inflight.set(i, position - start); report();
+        await handle.write(value, 0, value.byteLength, position); position += value.byteLength; attempt.got = position - start; report();
       }
       if (position !== end + 1) throw new Error('下载分段不完整');
       source.bytes += length(i); source.ms += Math.max(1, Date.now() - began); source.failures = 0;
     } catch (error) { throw watch.reason() || error; }
     finally { watch.stop(); }
   }
+  // Endgame: with nothing left to assign, an idle connection races the unfinished chunk with the most bytes left,
+  // preferably on another source. Both copies write identical bytes; the first to finish cancels the other.
+  const hedgeTarget = () => [...running].filter(([i, set]) => set.size === 1 && !done.has(i)).map(([i, set]) => ({ i, attempt: [...set][0] }))
+    .filter(({ i, attempt }) => !attempt.controller.signal.aborted && length(i) - attempt.got >= HEDGE_MIN).sort((a, b) => (length(b.i) - b.attempt.got) - (length(a.i) - a.attempt.got))[0];
   async function worker() {
-    while (pending.length) {
+    for (;;) {
       if (signal?.aborted) throw signal.reason;
-      const source = pick(); if (!source) return;
-      const i = pending.shift(); source.active++; inflight.set(i, 0);
-      try { await fetchChunk(i, source); done.add(i); doneBytes += length(i); save(); }
-      catch (error) {
+      let i, source;
+      if (pending.length) { source = pick(); if (!source) return; i = pending.shift(); }
+      else { const target = hedgeTarget(); if (!target) return; source = pick(target.attempt.source) || pick(); if (!source) return; i = target.i; }
+      const attempt = { controller: new AbortController(), source, got: 0 };
+      if (!running.has(i)) running.set(i, new Set());
+      running.get(i).add(attempt); source.active++;
+      try {
+        await fetchChunk(i, attempt);
+        if (!done.has(i)) { done.add(i); doneBytes += length(i); save(); }
+        for (const other of running.get(i)) if (other !== attempt) other.controller.abort(new Superseded('已由更快的连接完成'));
+      } catch (error) {
         if (signal?.aborted) throw signal.reason;
-        pending.unshift(i); source.resolved = null;
+        source.resolved = null;
+        if (attempt.controller.signal.aborted || done.has(i)) continue;
         if (error instanceof RangeUnsupported) source.noRange = true;
         else { errors.push(`${source.host}：${error.message}`); if (++source.failures >= 3) source.off = true; }
-        attempts.set(i, (attempts.get(i) || 0) + 1);
-        if (attempts.get(i) >= 8) for (const s of sources) s.off = true;
-      } finally { source.active--; inflight.delete(i); report(); }
+        if ([...running.get(i)].some(other => other !== attempt)) continue;
+        pending.unshift(i); failuresByChunk.set(i, (failuresByChunk.get(i) || 0) + 1);
+        if (failuresByChunk.get(i) >= 8) for (const s of sources) s.off = true;
+      } finally {
+        source.active--; const set = running.get(i); set.delete(attempt); if (!set.size) running.delete(i); report();
+      }
     }
   }
   let results;
   try {
     report(true);
-    results = await Promise.allSettled(Array.from({ length: Math.min(connections, pending.length || 1) }, worker));
+    results = await Promise.allSettled(Array.from({ length: Math.min(connections, PER_SOURCE * sources.length, pending.length || 1) }, worker));
     await saving;
   } finally { await handle.close(); }
   const failed = results.find(result => result.status === 'rejected'); if (failed) throw failed.reason;
